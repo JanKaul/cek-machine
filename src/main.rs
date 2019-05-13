@@ -42,10 +42,12 @@ fn step(state: State) -> State {
         },
         // case: Control == Application -> put Lambda term into control and put Argument into EvalArg continuation
         (Exp::App(t1,t2),e,k) => (*t1,e.clone(),Continuation::EvalArg(*t2,e,Box::new(k))),
-        // case: Control == Lambda && Cont == EvalArg -> put lambda expression into Call continuation and evaluate argument
-        (Exp::Lam(x,t1),e1,Continuation::EvalArg(t2,e2,k)) => (t2,e2,Continuation::Call(Exp::Lam(x,t1),e1,k)),
-        // case: Control == Lambda && Cont == Call -> wrap lambda plus environemt up in closure and save it in environment from continuation,
-        (Exp::Lam(x1,t1),e1,Continuation::Call(Exp::Lam(x2,t2),mut e2,k)) => {e2.insert(x2,Value::Closure((Exp::Lam(x1,t1),e1)));(*t2,e2,*k)},
+        // case: Control == Lambda && Cont == EvalArg -> put lambda expression into Call continuation and evaluate expression from EvalArg continuation
+        (Exp::Lam(x1,t1),e1,Continuation::EvalArg(t2,e2,k)) => (t2,e2,Continuation::Call(Exp::Lam(x1,t1),e1,k)),
+        // case: Control == Lambda && Cont == Call ->   set the argument of the Call continuation equal to the Closure of the Lambda expression and
+        //                                              its environment inside the environment of the Call continuation
+        (Exp::Lam(x2,t2),e2,Continuation::Call(Exp::Lam(x1,t1),mut e1,k)) => {e1.insert(x1,Value::Closure((Exp::Lam(x2,t2),e2)));(*t1,e1,*k)},
+        // else
         (c,e,_) => (c,e,Continuation::Failed)
     }
 }
