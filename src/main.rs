@@ -11,7 +11,6 @@ enum Exp {
     Bool(bool),
     Let(Box<Exp>,Box<Exp>,Box<Exp>),
     If(Box<Exp>,Box<Exp>,Box<Exp>),
-    Fix(Var,Box<Exp>,Box<Exp>),
 }
 
 type Environment = HashMap<Var,Value>;
@@ -23,7 +22,6 @@ enum Value {
     Closure(Closure),
     Int(i32),
     Bool(bool),
-    Fix(Var,Box<Exp>,Box<Exp>),
 }
 
 #[derive(Debug)]
@@ -42,22 +40,13 @@ type State = (Control,Environment,Continuation);
 fn step(state: State) -> State {
     match state {
         // case: Control == Variable -> Lookup variable in Environment
-        (Exp::Var(x),mut e1,k) => match e1.get_mut(&x).unwrap() {
+        (Exp::Var(x),e1,k) => match e1.get(&x).unwrap() {
             // if its a closure, use its environment and evaluate contained lambda expression
             Value::Closure((t,e2)) => (t.clone(),e2.clone(),k),
             // if its a integer, put integer in control
             Value::Int(x2) => (Exp::Int(x2.clone()),e1,k),
             // if its a boolean, put boolean in control
             Value::Bool(x2) => (Exp::Bool(x2.clone()),e1,k),
-            // if its a boolean, put boolean in control
-            Value::Fix(_,n,l) => match **n {
-                Exp::Int(mut i) => {i=i-1;if i>=0 {
-                    (*l.clone(),e1,k)
-                } else {
-                    (Exp::Var(x),e1,Continuation::Failed(String::from("Too many recursions")))
-                }},
-                _ => (Exp::Var(x),e1,Continuation::Failed(String::from("No int in fix"))),
-            },
         },
         // case: Control == Application -> put Lambda term into control and put Argument into EvalArg continuation
         (Exp::App(t1,t2),e,k) => (*t1,e.clone(),Continuation::EvalArg(*t2,e,Box::new(k))),
@@ -84,11 +73,6 @@ fn step(state: State) -> State {
             Exp::Bool(false) => (t3,e2,*k),
             _ => (c,e1,Continuation::Failed(String::from("No boolean in if clause")))
         },
-        // case: Control == Fix -> evaluate term and put same fix in environment
-        (Exp::Fix(f,n,l),mut e,k) => match *l.clone() {
-            Exp::Lam(_x,t) => {e.insert(f.clone(),Value::Fix(f,n,l));(*t,e,k)},
-            _ => (Exp::Fix(f,n,l),e,Continuation::Failed(String::from("No lambda in fix")))
-        },
         // else: Done
         (Exp::Int(x),e,_) => (Exp::Int(x),e,Continuation::Done),
         (Exp::Bool(x),e,_) => (Exp::Bool(x),e,Continuation::Done)
@@ -107,10 +91,12 @@ fn main() {
     let e3 = Box::new(Exp::Lam(String::from("f"),Box::new(Exp::App(Box::new(Exp::Var(String::from("f"))),Box::new(Exp::Int(1))))));
     let e4 = Box::new(Exp::App(Box::new(Exp::Lam(String::from("x"),Box::new(Exp::Lam(String::from("y"),Box::new(Exp::Var(String::from("x"))))))),Box::new(Exp::Int(2))));
 
-    let mut state = (Exp::App(e3,e4),env,Continuation::Done);
+    let e5 = Box::new(Exp::Lam(String::from("x"),Box::new(Exp::App(Box::new(Exp::Var(String::from("x"))),Box::new(Exp::Var(String::from("x")))))));
+
+    let mut state = (Exp::App(e5.clone(),e5),env,Continuation::Done);
 
     dbg!(&state);
-    for _i in 1..12 {
+    for _i in 1..15 {
         state = step(state);
         dbg!(&state);
     }
